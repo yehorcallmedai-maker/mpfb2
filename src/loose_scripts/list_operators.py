@@ -10,7 +10,7 @@ src_dir = os.path.abspath(os.path.join(root_dir, "src"))
 
 os.chdir(root_dir)
 
-child = subprocess.run(["grep", "-Ir", "MPFB_OT_", "src"],stdout=subprocess.PIPE) 
+child = subprocess.run(["grep", "-Ir", "MPFB_OT_", "src"], stdout=subprocess.PIPE, shell=False)
 
 s = io.StringIO(child.stdout.decode("utf-8"))
 
