@@ -1005,7 +1005,8 @@ class Rig:
     def add_pose_bone_info(self):
         """Extract information from the pose bones."""
 
-        assert self.armature_object.mode != 'EDIT'
+        if self.armature_object.mode == 'EDIT':
+            raise ValueError("add_pose_bone_info() must not be called in EDIT mode")
 
         for bone in self.armature_object.pose.bones:
             bone_info = self.rig_definition[bone.name]
