@@ -555,7 +555,8 @@ class Rig:
 
     def _restore_parent_ref(self, bone: bpy.types.PoseBone, bone_ref: dict, info: dict):
         assert self.parent
-        assert isinstance(bone_ref, dict)
+        if not isinstance(bone_ref, dict):
+            raise ValueError("bone_ref must be a dict, got: " + type(bone_ref).__name__)
 
         arm = self.parent.armature_object
         strategy = bone_ref["strategy"]
