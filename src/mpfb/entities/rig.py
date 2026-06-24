@@ -1200,7 +1200,8 @@ class Rig:
 
         mesh_obj: bpy.types.Object = self.basemesh
         mesh = mesh_obj.data
-        assert isinstance(mesh, bpy.types.Mesh)
+        if not isinstance(mesh, bpy.types.Mesh):
+            raise TypeError(f"Expected mesh data to be a bpy.types.Mesh, got {type(mesh)!r}")
 
         def_bones = set(RigService.get_deform_group_bones(self.armature_object))
         weights = {}
