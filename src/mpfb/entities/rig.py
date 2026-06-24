@@ -518,7 +518,8 @@ class Rig:
                 tgt.weight = tgt_info["weight"]
 
             if parent_ref := info.get("target"):
-                assert parent_ref["strategy"] == "VERTEX"
+                if parent_ref["strategy"] != "VERTEX":
+                    raise ValueError(f"Unsupported strategy: {parent_ref['strategy']!r}, expected 'VERTEX'")
 
                 vertex = parent_ref["vertex_index"]
 
