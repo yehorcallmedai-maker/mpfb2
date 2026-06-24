@@ -563,7 +563,8 @@ class Rig:
         if strategy is None:
             return arm
 
-        assert strategy == "JOINTS"
+        if strategy != "JOINTS":
+            raise ValueError(f"Unexpected strategy value: {strategy!r}")
 
         joint_head = bone_ref["joint_head"]
         joint_tail = bone_ref["joint_tail"]
