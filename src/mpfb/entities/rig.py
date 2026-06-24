@@ -1377,7 +1377,8 @@ class Rig:
 
         vertices = self.position_info["vertices"]
 
-        assert len(vertices) > 0
+        if not len(vertices) > 0:
+            raise ValueError("vertices must not be empty")
 
         vertex_tree = self.position_info["vertices_tree"] = KDTree(len(vertices))
 
