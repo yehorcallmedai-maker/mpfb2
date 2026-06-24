@@ -904,7 +904,8 @@ class Rig:
     def add_data_bone_info(self):
         """Extract bone information from the bone data."""
 
-        assert self.armature_object.mode != 'EDIT'
+        if self.armature_object.mode == 'EDIT':
+            raise ValueError("armature_object must not be in EDIT mode")
 
         for bone in self.armature_object.data.bones:
             bone_info = dict()
