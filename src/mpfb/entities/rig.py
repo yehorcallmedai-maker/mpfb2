@@ -554,7 +554,8 @@ class Rig:
             con.set_inverse_pending = True
 
     def _restore_parent_ref(self, bone: bpy.types.PoseBone, bone_ref: dict, info: dict):
-        assert self.parent
+        if not self.parent:
+            raise ValueError("self.parent must not be None")
         assert isinstance(bone_ref, dict)
 
         arm = self.parent.armature_object
