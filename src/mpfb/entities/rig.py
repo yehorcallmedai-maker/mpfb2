@@ -539,7 +539,8 @@ class Rig:
             elif isinstance(target, dict):
                 con.target = self._restore_parent_ref(bone, target, info)
             else:
-                assert not target
+                if target:
+                    raise ValueError(f"Unexpected target value: {target!r}")
 
         if info.get("space_object", False):
             con.space_object = self.armature_object
