@@ -844,7 +844,8 @@ class Rig:
 
         basemesh: bpy.types.Object = self.basemesh
 
-        assert isinstance(basemesh.data, bpy.types.Mesh)
+        if not isinstance(basemesh.data, bpy.types.Mesh):
+            raise TypeError("basemesh.data must be an instance of bpy.types.Mesh")
 
         if self.parent:
             # Copy cube data from the parent rig if present
