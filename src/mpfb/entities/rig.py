@@ -1474,7 +1474,8 @@ class Rig:
 
 
 def matrix_from_axis_pair(y_axis, other_axis, axis_name):
-    assert axis_name in 'xz'
+    if axis_name not in 'xz':
+        raise ValueError(f"axis_name must be 'x' or 'z', got {axis_name!r}")
 
     y_axis = Vector(y_axis).normalized()
 
