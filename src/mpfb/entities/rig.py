@@ -7,7 +7,7 @@ from ..services import ObjectService
 from ..services import RigService
 from .objectproperties import GeneralObjectProperties
 
-import bpy, math, json, random, typing, re
+import bpy, math, json, random, secrets, typing, re
 
 from bl_math import lerp
 from itertools import accumulate
@@ -873,7 +873,7 @@ class Rig:
                 coords = bm.verts
             else:
                 from ..services import TargetService
-                key_name = "temporary_fit_rig_key." + str(random.randrange(1000, 9999))
+                key_name = "temporary_fit_rig_key." + str(secrets.randbelow(9000) + 1000)
                 shape_key = TargetService.create_shape_key(basemesh, key_name, also_create_basis=True, create_from_mix=True)
                 coords = shape_key.data
 
