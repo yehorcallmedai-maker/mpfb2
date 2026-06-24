@@ -936,7 +936,8 @@ class Rig:
         """Extract bone information from the edit bones."""
         from ..ui.operations.boneops import BoneOpsEditBoneProperties
 
-        assert self.armature_object.mode == 'EDIT'
+        if self.armature_object.mode != 'EDIT':
+            raise ValueError("Armature object must be in EDIT mode")
         properties = BoneOpsEditBoneProperties
 
         for bone in self.armature_object.data.edit_bones:
