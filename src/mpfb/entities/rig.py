@@ -89,6 +89,11 @@ class Rig:
         return rig
 
     def _upgrade_definition(self) -> bool:
+        """Upgrade the rig definition to the current version in-place.
+
+        Returns True if any upgrade was performed, False if already current.
+        Raises ValueError if the version exceeds the current supported format.
+        """
         version = self.rig_header["version"]
         if version == CUR_VERSION:
             return False
@@ -268,6 +273,14 @@ class Rig:
         return armature_object
 
     def get_best_location_from_strategy(self, head_or_tail_info: dict, use_default: bool=True) -> list[float] | None:
+        """Return the world-space [x, y, z] for a bone end-point using its stored strategy.
+
+        Strategies: CUBE (joint-cube centroid), VERTEX (single mesh vertex), MEAN
+        (centroid of a vertex set), XYZ (per-axis vertex selection for Rigify heel
+        markers).  An optional *offset* is applied after resolution and scaled by
+        :attr:`relative_scale`.  Returns the default position when *use_default* is
+        True and resolution fails, or None otherwise.
+        """
         strategy = head_or_tail_info["strategy"]
         location = None
         try:
@@ -318,6 +331,11 @@ class Rig:
 
     @staticmethod
     def apply_bone_roll_strategy(bone: bpy.types.EditBone, roll_strategy: str, roll_reference_z: list[float] | None = None) -> None:
+        """Apply a named roll strategy to *bone*, modifying its roll in-place.
+
+        Strategies: ALIGN_Z_WORLD_Z, ALIGN_X_WORLD_X, ALIGN_Z_REFERENCE_Z
+        (aligns bone Z to *roll_reference_z* direction).
+        """
         matrix = None
 
         if roll_strategy == "ALIGN_Z_WORLD_Z":
@@ -339,6 +357,11 @@ class Rig:
             bone.roll = bpy.types.Bone.AxisRollFromMatrix(matrix, axis=bone.y_axis)[1]
 
     def create_bone_collections(self) -> None:
+        """Create bone collections on the armature from the rig header definition.
+
+        Removes existing collections and recreates them in the order listed under
+        ``rig_header["collections"]``.  Resets the active index to 0 when done.
+        """
         armature_object = typing.cast(bpy.types.Object, self.armature_object)
         collections = typing.cast(bpy.types.Armature, armature_object.data).collections
 
@@ -520,6 +543,12 @@ class Rig:
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
     def _apply_constraint_info(self, bone: bpy.types.PoseBone, info: dict) -> None:
+        """Recreate a single pose-bone constraint from a serialised *info* dict.
+
+        The dict must contain at minimum ``"type"`` and ``"name"``.  Cross-rig
+        parent references are resolved via :meth:`_restore_parent_ref`.
+        CHILD_OF constraints are flagged for inverse-matrix recalculation.
+        """
         con = bone.constraints.new(info["type"])
         con.name = info["name"]
 
@@ -573,6 +602,12 @@ class Rig:
             typing.cast(bpy.types.ChildOfConstraint, con).set_inverse_pending = True
 
     def _restore_parent_ref(self, bone: bpy.types.PoseBone, bone_ref: dict, info: dict) -> bpy.types.Object:
+        """Resolve a serialised parent-armature reference back to a Blender object.
+
+        For the JOINTS strategy, locates the bone chain between two joint cubes
+        and writes the best subtarget back into *info*.  Returns the parent armature
+        object directly when strategy is None.
+        """
         assert self.parent
         assert isinstance(bone_ref, dict)
 
@@ -766,6 +801,15 @@ class Rig:
     @staticmethod
     def assign_bone_end_strategy(bone: bpy.types.Bone | bpy.types.EditBone, info: dict, is_tail: bool, *,
                                  force: bool=False, lock: bool | None=None) -> None:
+        """Write a positioning strategy from *info* into bone custom properties.
+
+        Args:
+            bone: Data bone or edit bone to update.
+            info: Strategy dict from :meth:`_match_position_to_strategy`.
+            is_tail: True to update tail properties, False for head.
+            force: Skip the strategy-lock check and always write.
+            lock: If not None, also update the lock flag on the bone.
+        """
         from ..ui.operations.boneops import BoneOpsBoneProperties, BoneOpsEditBoneProperties
 
         properties = BoneOpsEditBoneProperties if isinstance(bone, bpy.types.EditBone) else BoneOpsBoneProperties
@@ -1007,6 +1051,11 @@ class Rig:
                 info["roll_reference_z"] = list(map(clean, info["roll_reference_z"]))
 
     def _encode_bbone_info(self, bone: bpy.types.Bone) -> dict:
+        """Serialise non-default B-Bone settings from *bone* to a compact dict.
+
+        Only fields that differ from their defaults are stored.  Handle bones are
+        stored as names.  Returns an empty dict when all values are at defaults.
+        """
         defaults = {
             "segments": 1,
             "mapping_mode": "STRAIGHT",
@@ -1079,6 +1128,12 @@ class Rig:
                 rigify["rigify_type"] = str(bone_any.rigify_type)
 
     def _encode_constraint_info(self, bone: bpy.types.PoseBone, con: bpy.types.Constraint) -> dict:
+        """Serialise a single pose-bone constraint to a JSON-compatible dict.
+
+        ARMATURE targets referencing a parent rig are encoded as VERTEX strategy
+        references.  Constraints referencing unrecognised objects are skipped and
+        the bone name is added to :attr:`bad_constraint_targets`.
+        """
         info: dict[str, typing.Any] = {
             "type": con.type,
             "name": con.name,
@@ -1133,6 +1188,12 @@ class Rig:
 
     @staticmethod
     def _add_constraint_properties(con: bpy.types.Constraint, info: dict) -> None:
+        """Append non-default, writable constraint properties to *info* in-place.
+
+        Skips base Constraint RNA properties, read-only properties, bpy_struct /
+        Matrix values, and for STRETCH_TO constraints also skips rest_length so it
+        resets automatically on skeleton refit.
+        """
         defaults = {
             'owner_space': 'WORLD', 'target_space': 'WORLD',
             'mute': False, 'influence': 1.0,
@@ -1164,6 +1225,12 @@ class Rig:
                     info[prop.identifier] = cur_value
 
     def _encode_constraint_parent_ref(self, bone: bpy.types.PoseBone, subtarget: str | None, info: dict | None=None) -> dict:
+        """Encode a reference to a parent-rig bone as a joint-pair strategy dict.
+
+        Returns ``{"strategy": "JOINTS", "joint_head": ..., "joint_tail": ...}``
+        so the reference survives rig regeneration.  Returns ``{"strategy": None}``
+        when *subtarget* is falsy or no enclosing joint pair can be found.
+        """
         if not subtarget:
             return {"strategy": None}
 
@@ -1188,7 +1255,12 @@ class Rig:
 
         return {"strategy": "JOINTS", "joint_head": head_joint, "joint_tail": tail_joint}
 
-    def _list_parents_until_joint(self, cur_name: str) -> tuple:
+    def _list_parents_until_joint(self, cur_name: str) -> tuple[str | None, list[str]]:
+        """Walk parent chain from *cur_name* until a head joint cube is found.
+
+        Returns ``(joint_name, prefix_chain)`` where prefix_chain lists parent
+        bone names traversed before *cur_name*.  Returns ``(None, [])`` on failure.
+        """
         bone_info = self.rig_definition.get(cur_name, None)
 
         if not bone_info:
@@ -1208,7 +1280,12 @@ class Rig:
 
         return joint, prefix + [parent.name]
 
-    def _list_children_until_joint(self, cur_name: str) -> tuple:
+    def _list_children_until_joint(self, cur_name: str) -> tuple[str | None, list[str]]:
+        """Walk connected children from *cur_name* until a tail joint cube is found.
+
+        Returns ``(joint_name, suffix_chain)``.  Chooses the shortest path when
+        multiple connected children exist.  Returns ``(None, [])`` on failure.
+        """
         bone_info = self.rig_definition.get(cur_name, None)
 
         if not bone_info:
@@ -1234,8 +1311,13 @@ class Rig:
         joint, suffix = sorted(candidates, key=lambda x: len(x[1]))[0]
         return joint, suffix
 
-    def _find_vertex_weights(self, vertex):
-        """Retrieve deform weights associated with the given mesh vertex."""
+    def _find_vertex_weights(self, vertex: int) -> dict[str, float]:
+        """Retrieve deform weights associated with the given mesh vertex.
+
+        Only vertex groups that correspond to deform bones in this armature are
+        included.  Returns an empty dict when vertex is out of range or no
+        matching deform groups exist.
+        """
 
         mesh_obj: bpy.types.Object = self.basemesh
         mesh = mesh_obj.data
@@ -1265,6 +1347,12 @@ class Rig:
             self._match_position_to_strategy(bone_info["tail"], fast)
 
     def _match_position_to_strategy(self, position_info: dict, fast: bool) -> None:
+        """Determine the best positioning strategy for a single bone end-point.
+
+        Compares CUBE, VERTEX, and (when *fast* is False) MEAN strategies against
+        ``position_info["default_position"]`` and writes the winner back into
+        *position_info* in-place.
+        """
         pos = position_info["default_position"]
 
         best_dist = 100.0
@@ -1321,7 +1409,13 @@ class Rig:
             self._restore_end_strategy(bone, bone_info, False)
             self._restore_end_strategy(bone, bone_info, True)
 
-    def get_bone_strategy_and_location(self, bone: bpy.types.Bone | bpy.types.EditBone, is_tail: bool) -> tuple:
+    def get_bone_strategy_and_location(self, bone: bpy.types.Bone | bpy.types.EditBone, is_tail: bool) -> tuple[dict | None, list[float] | None]:
+        """Return strategy info dict and resolved world-space location for a bone end.
+
+        Convenience wrapper combining :meth:`get_bone_end_strategy` with
+        :meth:`get_best_location_from_strategy`.  Location is None when no
+        strategy is stored or resolution fails.
+        """
         info, _force = self.get_bone_end_strategy(bone, is_tail)
         pos = None
 
@@ -1331,6 +1425,12 @@ class Rig:
         return info, pos
 
     def _restore_end_strategy(self, bone: bpy.types.Bone | bpy.types.EditBone, bone_info: dict, is_tail: bool) -> None:
+        """Restore a previously saved positioning strategy for one bone end-point.
+
+        Replaces the auto-detected strategy with the saved one when equally
+        accurate (within _STRATEGY_REPLACE_THRESHOLD) or when the lock flag is
+        set, preserving developer overrides across re-fits.
+        """
         field = "tail" if is_tail else "head"
         saved_head, force = self.get_bone_end_strategy(bone, is_tail)
 
@@ -1377,7 +1477,11 @@ class Rig:
             sqr_pos[i] = abs(pos1[i] - pos2[i]) * abs(pos1[i] - pos2[i])
         return math.sqrt(sqr_pos[0] + sqr_pos[1] + sqr_pos[2])
 
-    def _get_cube_tree(self) -> tuple:
+    def _get_cube_tree(self) -> tuple[KDTree | None, list[str] | None]:
+        """Return the KDTree and name list for joint-cube positions, cached on first call.
+
+        Returns ``(None, None)`` when no cubes are available.
+        """
         if "cubes_tree" in self.position_info:
             return self.position_info["cubes_tree"], self.position_info["cubes_list"]
 
@@ -1411,7 +1515,12 @@ class Rig:
 
         return None, None
 
-    def _get_vertex_tree(self):
+    def _get_vertex_tree(self) -> KDTree:
+        """Return the KDTree for basemesh vertex positions, cached on first call.
+
+        Raises AssertionError if :meth:`build_basemesh_position_info` has not
+        been called yet (empty vertex list).
+        """
         if "vertices_tree" in self.position_info:
             return self.position_info["vertices_tree"]
 
@@ -1443,6 +1552,11 @@ class Rig:
         return None, None
 
     def _get_vertex_total_height(self) -> float:
+        """Return the total Z-extent of the basemesh vertex cloud, cached on first call.
+
+        Computed as max(z) - min(z).  Used as a mesh-relative scale factor in
+        :meth:`find_closest_vertex_mean`.
+        """
         if "vertices_mean_scale" in self.position_info:
             return self.position_info["vertices_mean_scale"]
 
@@ -1519,6 +1633,21 @@ class Rig:
 
 def matrix_from_axis_pair(y_axis: Vector | typing.Sequence[float], other_axis: Vector | typing.Sequence[float],
                           axis_name: str) -> Matrix:
+    """Build an orthonormal rotation matrix from a Y axis and a secondary reference axis.
+
+    *y_axis* becomes the normalised Y column.  *other_axis* defines the plane
+    containing either the X (axis_name='x') or Z (axis_name='z') column; the
+    remaining axis is derived via cross products.  Used by
+    :meth:`Rig.apply_bone_roll_strategy` to align bone rolls to world axes.
+
+    Args:
+        y_axis: Desired bone length direction.
+        other_axis: Reference direction for the secondary axis.
+        axis_name: Secondary axis -- 'x' or 'z'.
+
+    Returns:
+        Transposed 3x3 Matrix whose columns are the three orthonormal bone axes.
+    """
     assert axis_name in 'xz'
 
     # Vector.cross is typed as float | Vector in the stubs (it returns a scalar for 2D vectors),
